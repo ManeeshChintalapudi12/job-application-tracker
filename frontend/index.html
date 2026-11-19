@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Application Tracker</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem; margin-bottom: 1rem; }
+  input, select, button { padding: .5rem; font-size: .95rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #ddd; text-align: left; padding: .45rem; }
+  .muted { color: #666; font-size: .9rem; }
+</style>
+</head>
+<body>
+  <h1>Job Application Tracker</h1>
+  <p class="muted">One application per company. Latest application wins. API: <code id="apiBase">http://localhost:8000</code></p>
+
+  <form id="addForm">
+    <input name="company" placeholder="Company" required />
+    <input name="role" placeholder="Role" required />
+    <input name="date_applied" type="date" required />
+    <select name="status">
+      <option>Applied</option><option>Screening</option><option>Interview</option>
+      <option>Offer</option><option>Rejected</option><option>Withdrawn</option>
+    </select>
+    <input name="notes" placeholder="Notes (optional)" />
+    <button type="submit">Add application</button>
+  </form>
+
+  <label>Filter by status:
+    <select id="statusFilter">
+      <option value="">All</option><option>Applied</option><option>Screening</option>
+      <option>Interview</option><option>Offer</option><option>Rejected</option><option>Withdrawn</option>
+    </select>
+  </label>
+  <p id="summary" class="muted"></p>
+
+  <table>
+    <thead><tr><th>Company</th><th>Role</th><th>Date</th><th>Status</th><th>Notes</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+<script>
+const API = "http://localhost:8000";
+const rowsEl = document.getElementById("rows");
+const summaryEl = document.getElementById("summary");
+
+async function load() {
+  const status = document.getElementById("statusFilter").value;
+  const url = status ? `${API}/applications?status=${encodeURIComponent(status)}` : `${API}/applications`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    rowsEl.innerHTML = data.map(a => `
+      <tr>
+        <td>${a.company}</td><td>${a.role}</td><td>${a.date_applied}</td>
+        <td>${a.status}</td><td>${a.notes || ""}</td>
+        <td><button onclick="removeApp(${a.id})">Delete</button></td>
+      </tr>`).join("");
+    summaryEl.textContent = `${data.length} application(s) shown. Start the backend first (see README) if this list is empty and the console shows a connection error.`;
+  } catch (e) {
+    summaryEl.textContent = "Could not reach the API at " + API + " — is the backend running?";
+  }
+}
+
+async function removeApp(id) {
+  await fetch(`${API}/applications/${id}`, { method: "DELETE" });
+  load();
+}
+
+document.getElementById("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  await fetch(`${API}/applications`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  e.target.reset();
+  load();
+});
+document.getElementById("statusFilter").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>
