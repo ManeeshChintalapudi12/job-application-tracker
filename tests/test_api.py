@@ -69,3 +69,32 @@ def test_stats_counts_by_status(client):
     stats = client.get("/stats").json()
     assert stats["total"] == 2
     assert stats["by_status"] == {"Applied": 1, "Interview": 1}
+
+
+def test_invalid_date_applied_rejected(client):
+    # Non-date string -> 422
+    bad = client.post("/applications", json={**SAMPLE, "date_applied": "tomorrow"})
+    assert bad.status_code == 422
+
+    # Impossible calendar date -> 422
+    bad = client.post("/applications", json={**SAMPLE, "date_applied": "2026-13-40"})
+    assert bad.status_code == 422
+
+    # A bad date on update is rejected too, and the stored row is untouched
+    created = client.post("/applications", json=SAMPLE).json()
+    bad_update = client.put(
+        f"/applications/{created['id']}", json={"date_applied": "19/11/2026"}
+    )
+    assert bad_update.status_code == 422
+    assert client.get(f"/applications/{created['id']}").json()["date_applied"] == SAMPLE["date_applied"]
+
+
+def test_list_filters_by_status_and_search(client):
+    client.post("/applications", json=SAMPLE)
+    client.post("/applications", json={**SAMPLE, "company": "Kira", "status": "Interview"})
+    client.post("/applications", json={**SAMPLE, "company": "Paystand Labs", "role": "Data Engineer"})
+
+    assert len(client.get("/applications", params={"status": "Interview"}).json()) == 1
+    found = client.get("/applications", params={"q": "paystand"}).json()
+    assert len(found) == 2
+    assert all("Paystand" in row["company"] for row in found)

@@ -12,18 +12,28 @@ from __future__ import annotations
 import os
 import sqlite3
 from contextlib import closing
+from datetime import date
 from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Status = Literal[
     "Applied", "Screening", "Interview", "Offer", "Rejected", "Withdrawn"
 ]
 
 DEFAULT_DB = Path(__file__).with_name("applications.db")
+
+
+def _valid_iso_date(value: str) -> str:
+    """Reject malformed dates (e.g. 'tomorrow', '2026-13-40') at the API edge."""
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise ValueError("date_applied must be a valid ISO date, e.g. 2026-11-19")
+    return value
 
 
 # ---------- Schemas ----------
@@ -34,6 +44,11 @@ class ApplicationCreate(BaseModel):
     status: Status = "Applied"
     notes: Optional[str] = Field(default="", max_length=1000)
 
+    @field_validator("date_applied")
+    @classmethod
+    def check_date(cls, value: str) -> str:
+        return _valid_iso_date(value)
+
 
 class ApplicationUpdate(BaseModel):
     company: Optional[str] = Field(default=None, min_length=1, max_length=120)
@@ -41,6 +56,11 @@ class ApplicationUpdate(BaseModel):
     date_applied: Optional[str] = None
     status: Optional[Status] = None
     notes: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("date_applied")
+    @classmethod
+    def check_date(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else _valid_iso_date(value)
 
 
 class ApplicationOut(ApplicationCreate):
