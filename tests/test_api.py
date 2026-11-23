@@ -98,3 +98,25 @@ def test_list_filters_by_status_and_search(client):
     found = client.get("/applications", params={"q": "paystand"}).json()
     assert len(found) == 2
     assert all("Paystand" in row["company"] for row in found)
+
+
+def test_list_pagination_limit_and_offset(client):
+    for i in range(5):
+        client.post("/applications", json={**SAMPLE, "company": f"Co {i}"})
+
+    first_page = client.get("/applications", params={"limit": 2}).json()
+    assert len(first_page) == 2
+
+    second_page = client.get("/applications", params={"limit": 2, "offset": 2}).json()
+    assert len(second_page) == 2
+    assert {row["id"] for row in first_page}.isdisjoint(
+        {row["id"] for row in second_page}
+    )
+
+    tail = client.get("/applications", params={"limit": 2, "offset": 4}).json()
+    assert len(tail) == 1
+
+    # Out-of-range values are rejected, not silently clamped
+    assert client.get("/applications", params={"limit": 0}).status_code == 422
+    assert client.get("/applications", params={"limit": 101}).status_code == 422
+    assert client.get("/applications", params={"offset": -1}).status_code == 422

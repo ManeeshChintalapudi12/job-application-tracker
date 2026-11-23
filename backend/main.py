@@ -122,6 +122,8 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
     def list_applications(
         status: Optional[Status] = None,
         q: Optional[str] = Query(default=None, description="Search company/role"),
+        limit: int = Query(default=50, ge=1, le=100, description="Max rows to return"),
+        offset: int = Query(default=0, ge=0, description="Rows to skip"),
     ) -> list[dict]:
         sql = "SELECT * FROM applications WHERE 1=1"
         params: list = []
@@ -131,7 +133,8 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         if q:
             sql += " AND (company LIKE ? OR role LIKE ?)"
             params += [f"%{q}%", f"%{q}%"]
-        sql += " ORDER BY date_applied DESC, id DESC"
+        sql += " ORDER BY date_applied DESC, id DESC LIMIT ? OFFSET ?"
+        params += [limit, offset]
         with closing(connect()) as conn:
             return [_row_to_dict(r) for r in conn.execute(sql, params)]
 
